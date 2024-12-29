@@ -1,15 +1,16 @@
-use bevy::{prelude::*, window::PrimaryWindow};
+use bevy::{prelude::*, window::PrimaryWindow, diagnostic::{FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin}};
 use rand::Rng;
 
 fn main() {
   App::new()
     .add_plugins(DefaultPlugins)
     .add_plugins(ParticlePlugin)
+    .add_plugins((FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin::default()))
     .run();
 }
 
 // const PARTICLE_SIZE: f32 = 5.0;
-const NUM_PARTICLES: i32 = 300;
+const NUM_PARTICLES: i32 = 750;
 const GRAVITY_FACTOR: f32 = 0.0;
 const COLLISION_DAMPENING: f32 = 1.0; // [0,1]
 const RESTITUTION: f32 = 1.0; // [0,1]

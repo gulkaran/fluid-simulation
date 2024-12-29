@@ -1,25 +1,30 @@
-use bevy::{prelude::*, window::PrimaryWindow};
+use bevy::{prelude::*, window::PrimaryWindow, diagnostic::{FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin}};
 use rand::Rng;
+use std::collections::HashMap;
 
 fn main() {
   App::new()
     .add_plugins(DefaultPlugins)
     .add_plugins(ParticlePlugin)
+    .add_plugins((FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin::default()))
     .run();
 }
 
 // const PARTICLE_SIZE: f32 = 5.0;
-const NUM_PARTICLES: i32 = 300;
+const NUM_PARTICLES: i32 = 750;
 const GRAVITY_FACTOR: f32 = 0.0;
 const COLLISION_DAMPENING: f32 = 1.0; // [0,1]
 const RESTITUTION: f32 = 1.0; // [0,1]
+const CELL_SIZE: f32 = 8.0; // Assuming max particle size is ~10.0
+
+
 pub struct ParticlePlugin;
 
 impl Plugin for ParticlePlugin {
   fn build(&self, app: &mut App) {
     app
       .add_systems(Startup, setup)
-      .add_systems(Update, (gravity, detect_collisions));
+      .add_systems(Update, (gravity, detect_collisions, debug_draw_grid));
   }
 }
 
@@ -107,33 +112,99 @@ fn detect_boundaries(
   }
 }
 
+#[derive(Default)]
+struct SpatialGrid {
+  cells: HashMap<(i32, i32), Vec<(Entity, Vec3, Vec3, f32)>>
+}
+
+impl SpatialGrid {
+  fn new() -> Self {
+    Self {
+      cells: HashMap::new()
+    }
+  }
+
+  fn insert(&mut self, entity: Entity, position: Vec3, velocity: Vec3, mass: f32) {
+    let cell = self.get_cell_coords(position);
+    self.cells.entry(cell).or_default().push((entity, position, velocity, mass));
+  }
+
+  fn get_cell_coords(&self, position: Vec3) -> (i32, i32) {
+    (
+      (position.x / CELL_SIZE).floor() as i32,
+      (position.y / CELL_SIZE).floor() as i32
+    )
+  }
+
+  fn get_neighboring_cells(&self, cell: (i32, i32)) -> Vec<(i32, i32)> {
+    let mut neighbors = Vec::with_capacity(9);
+    for dx in -1..=1 {
+      for dy in -1..=1 {
+        neighbors.push((cell.0 + dx, cell.1 + dy));
+      }
+    }
+    neighbors
+  }
+}
+
 pub fn detect_collisions(
   mut particle_query: Query<(Entity, &Transform, &mut Particle)>,
 ) {
+  // Initialize spatial grid
+  let mut grid = SpatialGrid::new();
+
+  // Insert all particles into the grid
   let entities: Vec<(Entity, Vec3, Vec3, f32)> = particle_query
     .iter()
     .map(|(entity, transform, particle)| {
-        (entity, transform.translation, particle.velocity, particle.mass)
+      let data = (entity, transform.translation, particle.velocity, particle.mass);
+      grid.insert(entity, transform.translation, particle.velocity, particle.mass);
+      data
     })
     .collect();
 
   let mut collisions = Vec::new();
 
-  for i in 0..entities.len() {
-    for j in (i + 1)..entities.len() {
-      let (e1, pos1, vel1, mass1) = entities[i];
-      let (e2, pos2, vel2, mass2) = entities[j];
+  // Check for collisions using grid
+  for (entity, position, velocity, mass) in &entities {
+    let cell = grid.get_cell_coords(*position);
+    let neighbor_cells = grid.get_neighboring_cells(cell);
 
-      let delta = pos1 - pos2;
-      let dist = delta.length();
+    // Check neighboring cells for collisions
+    for neighbor_cell in neighbor_cells {
+      if let Some(particles) = grid.cells.get(&neighbor_cell) {
+        for (other_entity, other_pos, other_vel, other_mass) in particles {
+          // Skip self-collision
+          if entity == other_entity {
+            continue;
+          }
 
-      // Check for collision
-      if dist < (mass1 + mass2) {
-        collisions.push((e1, e2, pos1, pos2, vel1, vel2, mass1, mass2));
+          let delta = *position - *other_pos;
+          let dist = delta.length();
+
+          // Check for collision
+          if dist < (mass + other_mass) {
+            collisions.push((
+              *entity,
+              *other_entity,
+              *position,
+              *other_pos,
+              *velocity,
+              *other_vel,
+              *mass,
+              *other_mass
+            ));
+          }
+        }
       }
     }
   }
 
+  // Remove duplicate collisions
+  collisions.sort_by_key(|&(e1, e2, _, _, _, _, _, _)| (e1.min(e2), e1.max(e2)));
+  collisions.dedup_by_key(|&mut (e1, e2, _, _, _, _, _, _)| (e1.min(e2), e1.max(e2)));
+
+  // Handle collisions
   for (e1, e2, pos1, pos2, vel1, vel2, mass1, mass2) in collisions {
     let (new_vel1, new_vel2) = elastic_collision(
       mass1, mass2,
@@ -147,6 +218,37 @@ pub fn detect_collisions(
     if let Ok((_, _, mut particle)) = particle_query.get_mut(e2) {
       particle.velocity = new_vel2;
     }
+  }
+}
+
+// Optional: Debug visualization system for the grid
+pub fn debug_draw_grid(
+  mut gizmos: Gizmos,
+  window_query: Query<&Window, With<PrimaryWindow>>,
+) {
+  let window = window_query.get_single().unwrap();
+  let width = window.width();
+  let height = window.height();
+
+  let cells_x = (width / CELL_SIZE).ceil() as i32;
+  let cells_y = (height / CELL_SIZE).ceil() as i32;
+
+  for x in -cells_x..=cells_x {
+    let x_pos = x as f32 * CELL_SIZE;
+    gizmos.line_2d(
+      Vec2::new(x_pos, -height/2.0),
+      Vec2::new(x_pos, height/2.0),
+      Color::srgba(0.5, 0.5, 0.5, 0.2)
+    );
+  }
+
+  for y in -cells_y..=cells_y {
+    let y_pos = y as f32 * CELL_SIZE;
+    gizmos.line_2d(
+      Vec2::new(-width/2.0, y_pos),
+      Vec2::new(width/2.0, y_pos),
+      Color::srgba(0.5, 0.5, 0.5, 0.2)
+    );
   }
 }
 

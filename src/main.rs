@@ -10,7 +10,7 @@ fn main() {
 }
 
 // const PARTICLE_SIZE: f32 = 5.0;
-const NUM_PARTICLES: i32 = 750;
+const NUM_PARTICLES: i32 = 10000;
 const GRAVITY_FACTOR: f32 = 0.0;
 const COLLISION_DAMPENING: f32 = 1.0; // [0,1]
 const RESTITUTION: f32 = 1.0; // [0,1]
@@ -41,7 +41,7 @@ pub fn setup(
     let x = rand::thread_rng().gen_range(- window_width / 2.0 .. window_width / 2.0);
     let y = rand::thread_rng().gen_range(- window_height / 2.0 .. window_height / 2.0);
     // let m = rand::thread_rng().gen_range(4.0 .. 9.0);
-    let m = 6.0;
+    let m = 1.5;
 
     let particle = Particle {
       position: Vec3::new(x, y, 0.0),

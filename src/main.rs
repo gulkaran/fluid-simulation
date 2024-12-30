@@ -11,11 +11,11 @@ fn main() {
 }
 
 // const PARTICLE_SIZE: f32 = 5.0;
-const NUM_PARTICLES: i32 = 5000;
+const NUM_PARTICLES: i32 = 10000;
 const GRAVITY_FACTOR: f32 = 0.0;
 const COLLISION_DAMPENING: f32 = 1.0; // [0,1]
 const RESTITUTION: f32 = 1.0; // [0,1]
-const CELL_SIZE: f32 = 5.0; // Assuming max particle size is ~10.0
+const CELL_SIZE: f32 = 15.0; // Assuming max particle size is ~10.0
 
 
 pub struct ParticlePlugin;
@@ -45,7 +45,7 @@ pub fn setup(
     let x = rand::thread_rng().gen_range(- window_width / 2.0 .. window_width / 2.0);
     let y = rand::thread_rng().gen_range(- window_height / 2.0 .. window_height / 2.0);
     // let m = rand::thread_rng().gen_range(4.0 .. 9.0);
-    let m = 3.0;
+    let m = 1.5;
 
     let particle = Particle {
       position: Vec3::new(x, y, 0.0),
@@ -150,10 +150,8 @@ impl SpatialGrid {
 pub fn detect_collisions(
   mut particle_query: Query<(Entity, &Transform, &mut Particle)>,
 ) {
-  // Initialize spatial grid
   let mut grid = SpatialGrid::new();
 
-  // Insert all particles into the grid
   let entities: Vec<(Entity, Vec3, Vec3, f32)> = particle_query
     .iter()
     .map(|(entity, transform, particle)| {
@@ -170,11 +168,10 @@ pub fn detect_collisions(
     let cell = grid.get_cell_coords(*position);
     let neighbor_cells = grid.get_neighboring_cells(cell);
 
-    // Check neighboring cells for collisions
     for neighbor_cell in neighbor_cells {
       if let Some(particles) = grid.cells.get(&neighbor_cell) {
         for (other_entity, other_pos, other_vel, other_mass) in particles {
-          // Skip self-collision
+
           if entity == other_entity {
             continue;
           }
@@ -182,7 +179,6 @@ pub fn detect_collisions(
           let delta = *position - *other_pos;
           let dist = delta.length();
 
-          // Check for collision
           if dist < (mass + other_mass) {
             collisions.push((
               *entity,
@@ -200,11 +196,9 @@ pub fn detect_collisions(
     }
   }
 
-  // Remove duplicate collisions
   collisions.sort_by_key(|&(e1, e2, _, _, _, _, _, _)| (e1.min(e2), e1.max(e2)));
   collisions.dedup_by_key(|&mut (e1, e2, _, _, _, _, _, _)| (e1.min(e2), e1.max(e2)));
 
-  // Handle collisions
   for (e1, e2, pos1, pos2, vel1, vel2, mass1, mass2) in collisions {
     let (new_vel1, new_vel2) = elastic_collision(
       mass1, mass2,
@@ -221,7 +215,6 @@ pub fn detect_collisions(
   }
 }
 
-// Optional: Debug visualization system for the grid
 pub fn debug_draw_grid(
   mut gizmos: Gizmos,
   window_query: Query<&Window, With<PrimaryWindow>>,

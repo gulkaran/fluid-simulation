@@ -15,7 +15,10 @@ To run the bevy project,
 
 ## **Showcase**
 
-Current WIP Update - optimized elastic particle collisions
+Current Update - 10,000 particle collision optimized using uniform grids (gif
+capped to 30fps)
+
+![Example](imgs/eg1.gif)
 
 ## **Note**
 

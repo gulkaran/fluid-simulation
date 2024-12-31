@@ -1,3 +1,4 @@
+use std::f32::consts::PI;
 use bevy::{prelude::*, window::PrimaryWindow, diagnostic::{FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin}};
 use rand::Rng;
 
@@ -9,11 +10,23 @@ fn main() {
     .run();
 }
 
-// const PARTICLE_SIZE: f32 = 5.0;
-const NUM_PARTICLES: i32 = 10000;
+const PARTICLE_SIZE: f32 = 3.0;
+const NUM_PARTICLES: i32 = 200;
 const GRAVITY_FACTOR: f32 = 0.0;
 const COLLISION_DAMPENING: f32 = 1.0; // [0,1]
 const RESTITUTION: f32 = 1.0; // [0,1]
+const SMOOTHING_RADIUS: f32 = 1.5;
+const MASS: f32 = 1.0;
+const TARGET_DENSITY: f32 = 1.0;
+const PRESSURE_MULTIPLIER: f32 = 2.0;
+
+
+#[derive(Resource)]
+struct SimulationState {
+  densities: Vec<f32>,
+  particle_property: Vec<f32>,
+}
+
 pub struct ParticlePlugin;
 
 impl Plugin for ParticlePlugin {
@@ -22,6 +35,13 @@ impl Plugin for ParticlePlugin {
       .add_systems(Startup, setup)
       .add_systems(Update, (gravity, detect_collisions));
   }
+}
+
+#[derive(Component)]
+pub struct Particle {
+  pub position: Vec3,
+  pub velocity: Vec3,
+  pub mass: f32
 }
 
 pub fn setup(
@@ -46,7 +66,7 @@ pub fn setup(
     let particle = Particle {
       position: Vec3::new(x, y, 0.0),
       velocity: Vec3::new(x, y, 0.0),
-      mass: m
+      mass: PARTICLE_SIZE
     };
 
     let shape = meshes.add(Circle::new(m));
@@ -175,9 +195,65 @@ fn elastic_collision(
   (v1f, v2f)
 }
 
-#[derive(Component)]
-pub struct Particle {
-  pub position: Vec3,
-  pub velocity: Vec3,
-  pub mass: f32
+fn smoothing_kernel(radius: f32, dist: f32) -> f32 {
+  let volume = (PI * radius.powf(4.0)) / 6.0;
+  (0.0 as f32).max(radius - dist).powf(2.0) / volume
+}
+
+fn smoothing_kernel_dx(radius: f32, dist: f32) -> f32 {
+  let scale = 12.0 / (radius.powf(4.0) * PI);
+  (0.0 as f32).max((radius - dist) * scale)
+}
+
+fn calculate_density(
+  particle_query: &Query<(&Transform, &Particle)>,
+  sample_particle: &Particle, 
+) -> f32 {
+  let mut density: f32 = 0.0;
+  
+  for (_, particle) in particle_query {
+    let dist = particle.position.distance(sample_particle.position);
+    let influence = smoothing_kernel(SMOOTHING_RADIUS, dist);
+    
+    density += MASS * influence;
+  }
+
+  density
+}
+
+
+fn update_density(
+  particle_query: Query<(&Transform, &Particle)>,
+  mut state: ResMut<SimulationState>,
+) {
+  for (i, (_, sample_particle)) in particle_query.iter().enumerate() {
+      state.densities[i] = calculate_density(&particle_query, sample_particle);
+  }
+}
+
+
+fn calculate_pressure_force(
+  particle_query: &Query<(&Transform, &Particle)>,
+  sample_particle: &Particle,
+  state: &SimulationState,
+) -> Vec3 {
+  let mut pressure_force = Vec3::ZERO;
+
+  for (i, (_, particle)) in particle_query.iter().enumerate() {
+    let dist = particle.position.distance(sample_particle.position);
+    if dist > 0.0 {
+      let dir = (particle.position - sample_particle.position) / dist;
+      let slope = smoothing_kernel_dx(SMOOTHING_RADIUS, dist);
+      let density = state.densities[i];
+      pressure_force += density_to_pressure(density) * dir * slope * MASS / density;
+    }
+  }
+
+  pressure_force
+}
+
+fn density_to_pressure(density: f32) -> f32 {
+  let density_err = density - TARGET_DENSITY;
+  let pressure = density_err * PRESSURE_MULTIPLIER;
+  pressure
 }

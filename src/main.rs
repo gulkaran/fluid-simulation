@@ -17,8 +17,8 @@ const COLLISION_DAMPENING: f32 = 0.5; // [0,1]
 const RESTITUTION: f32 = 1.0; // [0,1]
 const SMOOTHING_RADIUS: f32 = 200.0;
 const MASS: f32 = 1.0;
-const TARGET_DENSITY: f32 = 2.5;
-const PRESSURE_MULTIPLIER: f32 = 200.0;
+const TARGET_DENSITY: f32 = 1.5;
+const PRESSURE_MULTIPLIER: f32 = 10000.0;
 
 
 #[derive(Resource)]
@@ -43,7 +43,8 @@ impl Plugin for ParticlePlugin {
 pub struct Particle {
   pub position: Vec3,
   pub velocity: Vec3,
-  pub mass: f32
+  pub predicted_position: Vec3,
+  pub mass: f32,
 }
 
 pub fn setup(
@@ -66,6 +67,7 @@ pub fn setup(
     let particle = Particle {
       position: Vec3::new(x, y, 0.0),
       velocity: Vec3::ZERO,
+      predicted_position: Vec3::ZERO,
       mass: PARTICLE_SIZE
     };
 
@@ -95,7 +97,7 @@ pub fn setup(
 pub fn gravity(
   mut particle_query: Query<(&mut Transform, &mut Particle)>,
   window_query: Query<&Window, With<PrimaryWindow>>,
-  time: Res<Time>
+  time: Res<Time>,
 ) {
   for (mut transform, mut particle) in &mut particle_query {
     particle.velocity += Vec3::NEG_Y * GRAVITY_FACTOR * time.delta_secs();
@@ -103,6 +105,8 @@ pub fn gravity(
     let velocity = particle.velocity;
     particle.position += velocity * time.delta_secs();
     transform.translation = particle.position;
+    
+    particle.predicted_position = particle.position + particle.velocity * time.delta_secs();
 
     detect_boundaries(&mut particle, &window_query);
   }
@@ -185,10 +189,8 @@ fn elastic_collision(
     return (v1, v2);
   }
 
-  // Calculate impulse scalar
   let j = -(1.0 + RESTITUTION) * v_rel / (1.0/m1 + 1.0/m2);
   
-  // Apply impulse to get final velocities
   let v1f = v1 + (j / m1) * n;
   let v2f = v2 - (j / m2) * n;
 
@@ -206,7 +208,7 @@ pub fn apply_pressure_force(
   let particle_data: Vec<(Vec3, usize)> = particle_query
     .iter()
     .enumerate()
-    .map(|(i, (transform, _))| (transform.translation, i))
+    .map(|(i, (_, particle))| (particle.predicted_position, i))
     .collect();
 
   for (i, (_, mut particle)) in particle_query.iter_mut().enumerate() {
@@ -239,7 +241,7 @@ fn calculate_density(
   let mut density: f32 = 0.0;
   
   for (_, particle) in particle_query {
-    let dist = particle.position.distance(sample_particle.position);
+    let dist = particle.predicted_position.distance(sample_particle.predicted_position);
     let influence = smoothing_kernel(SMOOTHING_RADIUS, dist);
     
     density += MASS * influence;
@@ -266,12 +268,12 @@ fn calculate_pressure_force(
 ) -> Vec3 {
   let mut pressure_force = Vec3::ZERO;
 
-  for &(position, i) in particle_data {
+  for &(predicted_position, i) in particle_data {
     if i != sample_index {
-      let dist = position.distance(sample_particle.position);
+      let dist = predicted_position.distance(sample_particle.predicted_position);
 
       if dist > 0.0 {
-        let dir = (position - sample_particle.position) / dist;
+        let dir = (predicted_position - sample_particle.predicted_position) / dist;
         let slope = smoothing_kernel_dx(SMOOTHING_RADIUS, dist);
         let density = state.densities[i];
         let pressure = shared_pressure(density, state.densities[sample_index]);

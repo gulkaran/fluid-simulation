@@ -15,7 +15,12 @@ To run the bevy project,
 
 ## **Showcase**
 
-Current Update - 10,000 particle collision optimized using uniform grids (gif
+**Current Update** - Self-correcting constant density to simulate incompressible properties
+of fluids (bugs with boundaries for now).
+
+![Example](imgs/eg2.gif)
+
+**Previous Update** - 10,000 particle collision optimized using uniform grids (gif
 capped to 30fps)
 
 ![Example](imgs/eg1.gif)

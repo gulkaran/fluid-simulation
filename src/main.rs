@@ -118,8 +118,8 @@ fn detect_boundaries(
 ) {
 
   let window = window_query.get_single().unwrap();
-  let window_width = window.width() / 2.0 - particle.mass;
-  let window_height = window.height() / 2.0 - particle.mass;
+  let window_width = window.width() / 2.0 - (2.0 * PARTICLE_SIZE);
+  let window_height = window.height() / 2.0 - (2.0 * PARTICLE_SIZE);
   
   if particle.position.y.abs() > window_height {
     particle.position.y = window_height * particle.position.y.signum();

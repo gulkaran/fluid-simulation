@@ -11,14 +11,14 @@ fn main() {
 }
 
 const PARTICLE_SIZE: f32 = 3.0;
-const NUM_PARTICLES: i32 = 2000;
+const NUM_PARTICLES: i32 = 1000;
 const GRAVITY_FACTOR: f32 = 0.0;
-const COLLISION_DAMPENING: f32 = 1.0; // [0,1]
+const COLLISION_DAMPENING: f32 = 0.5; // [0,1]
 const RESTITUTION: f32 = 1.0; // [0,1]
 const SMOOTHING_RADIUS: f32 = 200.0;
 const MASS: f32 = 1.0;
 const TARGET_DENSITY: f32 = 2.5;
-const PRESSURE_MULTIPLIER: f32 = 1500.5;
+const PRESSURE_MULTIPLIER: f32 = 200.0;
 
 
 #[derive(Resource)]
@@ -119,12 +119,12 @@ fn detect_boundaries(
   
   if particle.position.y.abs() > window_height {
     particle.position.y = window_height * particle.position.y.signum();
-    particle.velocity *= Vec3::NEG_Y * COLLISION_DAMPENING;
+    particle.velocity.y *= -COLLISION_DAMPENING;
   }
 
   if particle.position.x.abs() > window_width {
     particle.position.x = window_width * particle.position.x.signum();
-    particle.velocity *= Vec3::NEG_X * COLLISION_DAMPENING;
+    particle.velocity.x *= -COLLISION_DAMPENING;
   }
 }
 
@@ -212,7 +212,7 @@ pub fn apply_pressure_force(
   for (i, (_, mut particle)) in particle_query.iter_mut().enumerate() {
     let pressure_force = calculate_pressure_force(&particle_data, &particle, &state, i);
     let pressure_acceleration = pressure_force / state.densities[i];
-    particle.velocity = pressure_acceleration * time.delta_secs();
+    particle.velocity += pressure_acceleration * time.delta_secs();
   }
 }
 
@@ -274,7 +274,7 @@ fn calculate_pressure_force(
         let dir = (position - sample_particle.position) / dist;
         let slope = smoothing_kernel_dx(SMOOTHING_RADIUS, dist);
         let density = state.densities[i];
-        let pressure = density_to_pressure(density);
+        let pressure = shared_pressure(density, state.densities[sample_index]);
         
         pressure_force += pressure * dir * slope * MASS / density;
       }
@@ -285,7 +285,13 @@ fn calculate_pressure_force(
 
 
 fn density_to_pressure(density: f32) -> f32 {
-  let density_err = density - TARGET_DENSITY;
+  let density_err = density - TARGET_DENSITY;  
   let pressure = density_err * PRESSURE_MULTIPLIER;
   pressure
+}
+
+fn shared_pressure(density: f32, other_density: f32) -> f32 {
+  let p1 = density_to_pressure(density);
+  let p2 = density_to_pressure(other_density);
+  (p1 + p2) / 2.0
 }

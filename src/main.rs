@@ -10,7 +10,7 @@ fn main() {
 }
 
 // const PARTICLE_SIZE: f32 = 5.0;
-const NUM_PARTICLES: i32 = 10000;
+const NUM_PARTICLES: i32 = 200;
 const GRAVITY_FACTOR: f32 = 0.0;
 const COLLISION_DAMPENING: f32 = 1.0; // [0,1]
 const RESTITUTION: f32 = 1.0; // [0,1]
@@ -41,7 +41,7 @@ pub fn setup(
     let x = rand::thread_rng().gen_range(- window_width / 2.0 .. window_width / 2.0);
     let y = rand::thread_rng().gen_range(- window_height / 2.0 .. window_height / 2.0);
     // let m = rand::thread_rng().gen_range(4.0 .. 9.0);
-    let m = 1.5;
+    let m = 4.0;
 
     let particle = Particle {
       position: Vec3::new(x, y, 0.0),
@@ -99,12 +99,12 @@ fn detect_boundaries(
   
   if particle.position.y.abs() > window_height {
     particle.position.y = window_height * particle.position.y.signum();
-    particle.velocity *= Vec3::NEG_Y * COLLISION_DAMPENING;
+    particle.velocity.y *= -COLLISION_DAMPENING;
   }
 
   if particle.position.x.abs() > window_width {
     particle.position.x = window_width * particle.position.x.signum();
-    particle.velocity *= Vec3::NEG_X * COLLISION_DAMPENING;
+    particle.velocity.x *= -COLLISION_DAMPENING;
   }
 }
 

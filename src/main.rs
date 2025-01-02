@@ -10,21 +10,20 @@ fn main() {
     .run();
 }
 
-const PARTICLE_SIZE: f32 = 3.0;
-const NUM_PARTICLES: i32 = 200;
+const PARTICLE_SIZE: f32 = 4.0;
+const NUM_PARTICLES: i32 = 150;
 const GRAVITY_FACTOR: f32 = 0.0;
 const COLLISION_DAMPENING: f32 = 1.0; // [0,1]
 const RESTITUTION: f32 = 1.0; // [0,1]
-const SMOOTHING_RADIUS: f32 = 1.5;
+const SMOOTHING_RADIUS: f32 = 500.0;
 const MASS: f32 = 1.0;
-const TARGET_DENSITY: f32 = 1.0;
-const PRESSURE_MULTIPLIER: f32 = 2.0;
+const TARGET_DENSITY: f32 = 1.5;
+const PRESSURE_MULTIPLIER: f32 = 1.5;
 
 
 #[derive(Resource)]
-struct SimulationState {
+pub struct SimulationState {
   densities: Vec<f32>,
-  particle_property: Vec<f32>,
 }
 
 pub struct ParticlePlugin;
@@ -32,8 +31,11 @@ pub struct ParticlePlugin;
 impl Plugin for ParticlePlugin {
   fn build(&self, app: &mut App) {
     app
+      .insert_resource(SimulationState {
+          densities: vec![0.0; NUM_PARTICLES as usize],
+      })
       .add_systems(Startup, setup)
-      .add_systems(Update, (gravity, detect_collisions));
+      .add_systems(Update, (gravity, detect_collisions, (update_density, apply_pressure_force).chain()));
   }
 }
 
@@ -60,16 +62,14 @@ pub fn setup(
     
     let x = rand::thread_rng().gen_range(- window_width / 2.0 .. window_width / 2.0);
     let y = rand::thread_rng().gen_range(- window_height / 2.0 .. window_height / 2.0);
-    // let m = rand::thread_rng().gen_range(4.0 .. 9.0);
-    let m = 1.5;
 
     let particle = Particle {
       position: Vec3::new(x, y, 0.0),
-      velocity: Vec3::new(x, y, 0.0),
+      velocity: Vec3::ZERO,
       mass: PARTICLE_SIZE
     };
 
-    let shape = meshes.add(Circle::new(m));
+    let shape = meshes.add(Circle::new(PARTICLE_SIZE));
     let color = Color::hsl(360. * rand::thread_rng().gen_range(0.0..1.0), 0.95, 0.7);
     
     commands.spawn((
@@ -195,14 +195,41 @@ fn elastic_collision(
   (v1f, v2f)
 }
 
+
+pub fn apply_pressure_force(
+  mut particle_query: Query<(&Transform, &mut Particle)>,
+  time: Res<Time>,
+  state: Res<SimulationState>,
+) {
+
+  // collect positions first to avoid conflicts
+  let particle_data: Vec<(Vec3, usize)> = particle_query
+    .iter()
+    .enumerate()
+    .map(|(i, (transform, _))| (transform.translation, i))
+    .collect();
+
+  for (i, (_, mut particle)) in particle_query.iter_mut().enumerate() {
+    let pressure_force = calculate_pressure_force(&particle_data, &particle, &state, i);
+    let pressure_acceleration = pressure_force / state.densities[i];
+    particle.velocity += pressure_acceleration * time.delta_secs();
+  }
+}
+
+
 fn smoothing_kernel(radius: f32, dist: f32) -> f32 {
   let volume = (PI * radius.powf(4.0)) / 6.0;
   (0.0 as f32).max(radius - dist).powf(2.0) / volume
 }
 
 fn smoothing_kernel_dx(radius: f32, dist: f32) -> f32 {
+
+  if dist >= radius {
+    return 0.0;
+  }
+
   let scale = 12.0 / (radius.powf(4.0) * PI);
-  (0.0 as f32).max((radius - dist) * scale)
+  (radius - dist) * scale
 }
 
 fn calculate_density(
@@ -221,7 +248,6 @@ fn calculate_density(
   density
 }
 
-
 fn update_density(
   particle_query: Query<(&Transform, &Particle)>,
   mut state: ResMut<SimulationState>,
@@ -233,24 +259,30 @@ fn update_density(
 
 
 fn calculate_pressure_force(
-  particle_query: &Query<(&Transform, &Particle)>,
+  particle_data: &[(Vec3, usize)], // positions and velocities
   sample_particle: &Particle,
   state: &SimulationState,
+  sample_index: usize,
 ) -> Vec3 {
   let mut pressure_force = Vec3::ZERO;
 
-  for (i, (_, particle)) in particle_query.iter().enumerate() {
-    let dist = particle.position.distance(sample_particle.position);
-    if dist > 0.0 {
-      let dir = (particle.position - sample_particle.position) / dist;
-      let slope = smoothing_kernel_dx(SMOOTHING_RADIUS, dist);
-      let density = state.densities[i];
-      pressure_force += density_to_pressure(density) * dir * slope * MASS / density;
+  for &(position, i) in particle_data {
+    if i != sample_index {
+      let dist = position.distance(sample_particle.position);
+
+      if dist > 0.0 {
+        let dir = (position - sample_particle.position) / dist;
+        let slope = smoothing_kernel_dx(SMOOTHING_RADIUS, dist);
+        let density = state.densities[i];
+        let pressure = density_to_pressure(density);
+        
+        pressure_force += pressure * dir * slope * MASS / density;
+      }
     }
   }
-
   pressure_force
 }
+
 
 fn density_to_pressure(density: f32) -> f32 {
   let density_err = density - TARGET_DENSITY;

@@ -10,15 +10,15 @@ fn main() {
     .run();
 }
 
-const PARTICLE_SIZE: f32 = 4.0;
-const NUM_PARTICLES: i32 = 150;
+const PARTICLE_SIZE: f32 = 3.0;
+const NUM_PARTICLES: i32 = 2000;
 const GRAVITY_FACTOR: f32 = 0.0;
 const COLLISION_DAMPENING: f32 = 1.0; // [0,1]
 const RESTITUTION: f32 = 1.0; // [0,1]
-const SMOOTHING_RADIUS: f32 = 500.0;
+const SMOOTHING_RADIUS: f32 = 200.0;
 const MASS: f32 = 1.0;
-const TARGET_DENSITY: f32 = 1.5;
-const PRESSURE_MULTIPLIER: f32 = 1.5;
+const TARGET_DENSITY: f32 = 2.5;
+const PRESSURE_MULTIPLIER: f32 = 1500.5;
 
 
 #[derive(Resource)]
@@ -212,7 +212,7 @@ pub fn apply_pressure_force(
   for (i, (_, mut particle)) in particle_query.iter_mut().enumerate() {
     let pressure_force = calculate_pressure_force(&particle_data, &particle, &state, i);
     let pressure_acceleration = pressure_force / state.densities[i];
-    particle.velocity += pressure_acceleration * time.delta_secs();
+    particle.velocity = pressure_acceleration * time.delta_secs();
   }
 }
 
@@ -259,7 +259,7 @@ fn update_density(
 
 
 fn calculate_pressure_force(
-  particle_data: &[(Vec3, usize)], // positions and velocities
+  particle_data: &[(Vec3, usize)],
   sample_particle: &Particle,
   state: &SimulationState,
   sample_index: usize,

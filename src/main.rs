@@ -10,15 +10,15 @@ fn main() {
     .run();
 }
 
-const PARTICLE_SIZE: f32 = 3.0;
-const NUM_PARTICLES: i32 = 1000;
-const GRAVITY_FACTOR: f32 = 0.0;
+const PARTICLE_SIZE: f32 = 2.0;
+const NUM_PARTICLES: i32 = 1500;
+const GRAVITY_FACTOR: f32 = 500.0;
 const COLLISION_DAMPENING: f32 = 0.5; // [0,1]
 const RESTITUTION: f32 = 1.0; // [0,1]
-const SMOOTHING_RADIUS: f32 = 200.0;
+const SMOOTHING_RADIUS: f32 = 20.0;
 const MASS: f32 = 1.0;
-const TARGET_DENSITY: f32 = 1.5;
-const PRESSURE_MULTIPLIER: f32 = 10000.0;
+const TARGET_DENSITY: f32 = 0.4;
+const PRESSURE_MULTIPLIER: f32 = 5000.0;
 
 
 #[derive(Resource)]
@@ -35,7 +35,11 @@ impl Plugin for ParticlePlugin {
           densities: vec![0.0; NUM_PARTICLES as usize],
       })
       .add_systems(Startup, setup)
-      .add_systems(Update, (gravity, detect_collisions, (update_density, apply_pressure_force).chain()));
+      .add_systems(Update, (
+        gravity, 
+        (update_density, 
+          apply_pressure_force).chain(),
+        ));
   }
 }
 

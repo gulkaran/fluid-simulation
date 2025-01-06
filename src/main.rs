@@ -18,7 +18,8 @@ const RESTITUTION: f32 = 1.0; // [0,1]
 const SMOOTHING_RADIUS: f32 = 20.0;
 const MASS: f32 = 1.0;
 const TARGET_DENSITY: f32 = 0.4;
-const PRESSURE_MULTIPLIER: f32 = 5000.0;
+const PRESSURE_MULTIPLIER: f32 = 6500.0;
+const COLOR: Color = Color::hsl(190.0, 1.0, 0.5);
 
 
 #[derive(Resource)]
@@ -37,6 +38,7 @@ impl Plugin for ParticlePlugin {
       .add_systems(Startup, setup)
       .add_systems(Update, (
         gravity, 
+        // detect_collisions,
         (update_density, 
           apply_pressure_force).chain(),
         ));
@@ -76,18 +78,17 @@ pub fn setup(
     };
 
     let shape = meshes.add(Circle::new(PARTICLE_SIZE));
-    let color = Color::hsl(360. * rand::thread_rng().gen_range(0.0..1.0), 0.95, 0.7);
     
     commands.spawn((
       particle,
       Mesh2d(shape),
-      MeshMaterial2d(materials.add(color)),
+      MeshMaterial2d(materials.add(COLOR)),
       Transform::from_xyz(x, y,0.0)
     ));
     
     #[cfg(not(target_arch = "wasm32"))]
     commands.spawn((
-      Text::new("Particle Simulation"),
+      Text::new("Fluid Simulation"),
       Node {
         position_type: PositionType::Absolute,
         top: Val::Px(12.0),

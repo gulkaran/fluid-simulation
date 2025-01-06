@@ -15,7 +15,12 @@ To run the bevy project,
 
 ## **Showcase**
 
-**Current Update** - Self-correcting constant density to simulate incompressible properties
+**Current Update** - Reintroduced gravity and added pressure forces. It's now more representative
+of a fluid.
+
+![Example](imgs/eg3.gif)
+
+**Previous Update** - Self-correcting constant density to simulate incompressible properties
 of fluids (bugs with boundaries for now).
 
 ![Example](imgs/eg2.gif)
